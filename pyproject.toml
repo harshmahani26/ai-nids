@@ -1,0 +1,38 @@
+[project]
+name = "ai-nids"
+version = "0.1.0"
+description = "Multi-tier ML/DL Network Intrusion Detection System"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Harsh Mahani" }]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "data", "results", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]
+ignore = ["E501", "B008", "N803", "N806"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = '''/(\.venv|data|results|notebooks)/'''
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+disallow_untyped_defs = false
+exclude = ["tests/", "notebooks/", "scripts/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

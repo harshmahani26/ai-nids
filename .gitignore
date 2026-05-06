@@ -1,0 +1,46 @@
+# Data
+data/raw/
+data/processed/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Models and large outputs
+*.pkl
+*.pt
+*.pth
+*.ckpt
+results/checkpoints/*.pt
+results/checkpoints/*.pth
+
+# Optuna studies
+*.db
+
+# TensorBoard
+runs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config
+.env
+.claude/
