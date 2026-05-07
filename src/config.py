@@ -41,11 +41,11 @@ class Paths:
 class TrainConfig:
     seed: int = 42
     cv_folds: int = 5
-    optuna_trials: int = 25
+    optuna_trials: int = 20
     svm_subsample: int = 20_000
-    deep_epochs: int = 30
-    deep_batch_size: int = 512
-    deep_patience: int = 5
+    deep_epochs: int = 15
+    deep_batch_size: int = 1024
+    deep_patience: int = 3
     deep_lr: float = 1e-3
     hybrid_threshold_search: tuple[float, ...] = (0.1, 0.2, 0.3, 0.5, 0.7, 0.9)
 

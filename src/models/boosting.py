@@ -163,9 +163,9 @@ def tune_catboost(X_df: pd.DataFrame, y: np.ndarray, meta: DatasetMeta):
 
     def objective(trial: optuna.Trial) -> float:
         params: dict[str, Any] = {
-            "iterations": trial.suggest_int("iterations", 200, 800, step=100),
-            "depth": trial.suggest_int("depth", 4, 10),
-            "learning_rate": trial.suggest_float("learning_rate", 0.02, 0.3, log=True),
+            "iterations": trial.suggest_int("iterations", 150, 400, step=50),
+            "depth": trial.suggest_int("depth", 4, 8),
+            "learning_rate": trial.suggest_float("learning_rate", 0.05, 0.3, log=True),
             "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1.0, 10.0),
             "random_strength": trial.suggest_float("random_strength", 0.0, 1.0),
             "loss_function": "MultiClass",
@@ -173,14 +173,17 @@ def tune_catboost(X_df: pd.DataFrame, y: np.ndarray, meta: DatasetMeta):
             "random_seed": CONFIG.train.seed,
             "verbose": 0,
             "allow_writing_files": False,
+            "early_stopping_rounds": 30,
         }
         clf = CatBoostClassifier(**params)
         clf.fit(train_pool, eval_set=val_pool, verbose=0)
         preds = clf.predict(X_val_df).ravel().astype(int)
         return _macro_f1(y_val, preds)
 
+    # CatBoost is the slowest of the three; cap at 12 trials to keep wall time
+    # comparable to XGBoost / LightGBM (which finish in 2-3 min each).
     study = make_study("catboost")
-    study.optimize(objective, n_trials=CONFIG.train.optuna_trials, show_progress_bar=False)
+    study.optimize(objective, n_trials=min(CONFIG.train.optuna_trials, 12), show_progress_bar=False)
     log.info("CatBoost best: %s | macroF1=%.4f", study.best_params, study.best_value)
 
     final = CatBoostClassifier(

@@ -148,8 +148,8 @@ def waterfall_for_record(
         sv = np.transpose(sv, (1, 2, 0))
     sv = np.asarray(sv)
     base_value = explainer.expected_value
-    if isinstance(base_value, np.ndarray):
-        base_for_class = float(base_value[record_label])
+    if isinstance(base_value, (list, tuple, np.ndarray)):
+        base_for_class = float(np.asarray(base_value)[record_label])
     else:
         base_for_class = float(base_value)
     sv_class = sv[0, :, record_label] if sv.ndim == 3 else sv[0]

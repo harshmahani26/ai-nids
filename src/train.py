@@ -89,7 +89,11 @@ def run_classical(split, X_train_df=None, X_test_df=None) -> None:
 
 
 def run_boosting(split, X_train_df=None, X_test_df=None) -> None:
-    """Tier 2: XGBoost, LightGBM, CatBoost (Optuna-tuned)."""
+    """Tier 2: XGBoost, LightGBM, CatBoost (Optuna-tuned).
+
+    Each model is evaluated and persisted *as soon as it finishes tuning* so a
+    crash midway through a long run does not lose earlier work.
+    """
     from src.evaluate import evaluate_classifier, upsert_result
     from src.models.boosting import tune_catboost, tune_lightgbm, tune_xgboost
 
@@ -97,90 +101,73 @@ def run_boosting(split, X_train_df=None, X_test_df=None) -> None:
 
     t0 = time.perf_counter()
     xgb = tune_xgboost(split.X_train, split.y_train_multi, split.meta)
-    xgb_t = time.perf_counter() - t0
+    upsert_result(evaluate_classifier(
+        name="XGBoost", model=xgb, X_test=split.X_test,
+        y_test_multi=split.y_test_multi, y_test_binary=split.y_test_binary,
+        meta=split.meta, train_time_s=time.perf_counter() - t0,
+    ))
 
     t0 = time.perf_counter()
     lgb = tune_lightgbm(split.X_train, split.y_train_multi, split.meta)
-    lgb_t = time.perf_counter() - t0
+    upsert_result(evaluate_classifier(
+        name="LightGBM", model=lgb, X_test=split.X_test,
+        y_test_multi=split.y_test_multi, y_test_binary=split.y_test_binary,
+        meta=split.meta, train_time_s=time.perf_counter() - t0,
+    ))
 
     t0 = time.perf_counter()
     # CatBoost gets the raw DataFrame so it can use cat_features natively.
     cat = tune_catboost(X_train_df, split.y_train_multi, split.meta)
-    cat_t = time.perf_counter() - t0
-
-    for name, model, t, X in [
-        ("XGBoost", xgb, xgb_t, split.X_test),
-        ("LightGBM", lgb, lgb_t, split.X_test),
-        ("CatBoost", cat, cat_t, X_test_df),
-    ]:
-        result = evaluate_classifier(
-            name=name,
-            model=model,
-            X_test=X,
-            y_test_multi=split.y_test_multi,
-            y_test_binary=split.y_test_binary,
-            meta=split.meta,
-            train_time_s=t,
-        )
-        upsert_result(result)
+    upsert_result(evaluate_classifier(
+        name="CatBoost", model=cat, X_test=X_test_df,
+        y_test_multi=split.y_test_multi, y_test_binary=split.y_test_binary,
+        meta=split.meta, train_time_s=time.perf_counter() - t0,
+    ))
 
 
 def run_deep(split) -> None:
-    """Tier 3: 1D-CNN, LSTM, Autoencoder."""
+    """Tier 3: 1D-CNN, LSTM, Autoencoder.
+
+    Each model is evaluated and persisted as soon as it finishes training.
+    """
     from src.evaluate import evaluate_classifier, upsert_result
-    from src.models.deep import (
-        AutoencoderDetector,
-        train_cnn,
-        train_lstm,
-    )
+    from src.models.deep import AutoencoderDetector, train_cnn, train_lstm
 
     log.info("=== Tier 3: Deep learning (%s) ===", split.meta.name)
 
     t0 = time.perf_counter()
-    cnn = train_cnn(split)
-    cnn_t = time.perf_counter() - t0
-    upsert_result(
-        evaluate_classifier(
-            name="1D-CNN",
-            model=cnn,
-            X_test=split.X_test,
-            y_test_multi=split.y_test_multi,
-            y_test_binary=split.y_test_binary,
-            meta=split.meta,
-            train_time_s=cnn_t,
-        )
-    )
+    try:
+        cnn = train_cnn(split)
+        upsert_result(evaluate_classifier(
+            name="1D-CNN", model=cnn, X_test=split.X_test,
+            y_test_multi=split.y_test_multi, y_test_binary=split.y_test_binary,
+            meta=split.meta, train_time_s=time.perf_counter() - t0,
+        ))
+    except Exception:
+        log.exception("CNN failed")
 
     t0 = time.perf_counter()
-    lstm = train_lstm(split)
-    lstm_t = time.perf_counter() - t0
-    upsert_result(
-        evaluate_classifier(
-            name="LSTM",
-            model=lstm,
-            X_test=split.X_test,
-            y_test_multi=split.y_test_multi,
-            y_test_binary=split.y_test_binary,
-            meta=split.meta,
-            train_time_s=lstm_t,
-        )
-    )
+    try:
+        lstm = train_lstm(split)
+        upsert_result(evaluate_classifier(
+            name="LSTM", model=lstm, X_test=split.X_test,
+            y_test_multi=split.y_test_multi, y_test_binary=split.y_test_binary,
+            meta=split.meta, train_time_s=time.perf_counter() - t0,
+        ))
+    except Exception:
+        log.exception("LSTM failed")
 
     t0 = time.perf_counter()
-    ae = AutoencoderDetector().fit(split)
-    ae_t = time.perf_counter() - t0
-    upsert_result(
-        evaluate_classifier(
-            name="Autoencoder",
-            model=ae,
-            X_test=split.X_test,
-            y_test_multi=split.y_test_multi,
-            y_test_binary=split.y_test_binary,
-            meta=split.meta,
-            train_time_s=ae_t,
+    try:
+        ae = AutoencoderDetector().fit(split)
+        upsert_result(evaluate_classifier(
+            name="Autoencoder", model=ae, X_test=split.X_test,
+            y_test_multi=split.y_test_multi, y_test_binary=split.y_test_binary,
+            meta=split.meta, train_time_s=time.perf_counter() - t0,
             extra={"threshold": float(ae.threshold_), "approach": "reconstruction-error"},
-        )
-    )
+        ))
+    except Exception:
+        log.exception("Autoencoder failed")
 
 
 def run_hybrid(split) -> None:

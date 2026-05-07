@@ -27,12 +27,14 @@ def build_stacking(split: PreprocessedSplit) -> StackingClassifier:
     # Use modest defaults rather than re-running Optuna; the boosting tier
     # already has tuned models, but rebuilding fresh keeps stacking
     # independent and reproducible.
+    # Modest base learner sizes - StackingClassifier fits each 6 times
+    # (5 OOF folds + 1 final), so the per-model size has to be tractable.
     base = [
         (
             "xgb",
             xgb.XGBClassifier(
-                n_estimators=400,
-                max_depth=8,
+                n_estimators=200,
+                max_depth=6,
                 learning_rate=0.1,
                 tree_method="hist",
                 random_state=CONFIG.train.seed,
@@ -45,8 +47,8 @@ def build_stacking(split: PreprocessedSplit) -> StackingClassifier:
         (
             "lgb",
             lgb.LGBMClassifier(
-                n_estimators=400,
-                num_leaves=64,
+                n_estimators=200,
+                num_leaves=32,
                 learning_rate=0.1,
                 random_state=CONFIG.train.seed,
                 n_jobs=-1,
@@ -58,7 +60,7 @@ def build_stacking(split: PreprocessedSplit) -> StackingClassifier:
         (
             "rf",
             RandomForestClassifier(
-                n_estimators=200,
+                n_estimators=100,
                 max_depth=None,
                 n_jobs=1,
                 random_state=CONFIG.train.seed,
@@ -66,7 +68,7 @@ def build_stacking(split: PreprocessedSplit) -> StackingClassifier:
         ),
     ]
     meta = LogisticRegression(max_iter=2000, n_jobs=-1)
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=CONFIG.train.seed)
+    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=CONFIG.train.seed)
 
     log.info("Stacking: fitting base learners with 5-fold CV passthrough")
     stack = StackingClassifier(
