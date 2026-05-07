@@ -9,26 +9,31 @@ The most useful finding: on NSL-KDD KDDTest+, the unsupervised autoencoder (trai
 
 ## Results
 
-KDDTest+ (NSL-KDD) and the official UNSW-NB15 train/test partition. Latency is per-record, batched, on CPU. Model size is the pickled estimator.
+KDDTest+ (NSL-KDD) and the official UNSW-NB15 train/test partition. Latency is per-record on the host CPU; both batched (1,000 rows in one `predict` call) and unbatched (single-row predicts, capped at 200 rows) are reported. Older entries show 0.000 ms unbatched because they predate the unbatched-timing harness; the current code paths always populate both. Model size is the pickled estimator on disk.
 
 <!-- RESULTS_TABLE_START -->
-| Dataset | Model | Binary Acc | Multi Acc | Macro F1 | Weighted F1 | ROC-AUC | PR-AUC | Inference (ms) | Train (s) | Size (MB) |
-|---|---|---|---|---|---|---|---|---|---|---|
-| NSLKDD | Random Forest | 76.00% | 75.03% | 0.502 | 0.704 | 0.964 | 0.966 | 0.051 | 87.8 | 32.3 |
-| NSLKDD | SVM (RBF) | 76.23% | 74.66% | 0.465 | 0.696 | 0.948 | 0.961 | 0.137 | 161.7 | 0.9 |
-| NSLKDD | KNN | 76.01% | 74.37% | 0.543 | 0.699 | 0.804 | 0.824 | 0.065 | 40.6 | 40.4 |
-| NSLKDD | Voting Ensemble | 75.54% | 74.06% | 0.480 | 0.692 | 0.969 | 0.973 | 0.315 | 119.9 | 147.1 |
-| NSLKDD | XGBoost | 78.66% | 77.31% | 0.551 | 0.734 | 0.970 | 0.972 | 0.003 | 91.6 | 2.2 |
-| NSLKDD | LightGBM | 77.13% | 75.68% | 0.590 | 0.718 | 0.973 | 0.973 | 0.018 | 125.1 | 14.9 |
-| NSLKDD | CatBoost | 77.42% | 76.34% | 0.533 | 0.723 | 0.969 | 0.971 | 0.004 | 304.7 | 5.0 |
-| NSLKDD | 1D-CNN | 76.49% | 74.95% | 0.494 | 0.701 | 0.937 | 0.951 | 0.012 | 61.8 | 0.1 |
-| NSLKDD | LSTM | 77.30% | 75.77% | 0.489 | 0.712 | 0.938 | 0.945 | 0.013 | 50.7 | 0.2 |
-| NSLKDD | Autoencoder | 85.93% | 71.15% | 0.321 | 0.617 | 0.946 | 0.942 | 0.006 | 1.9 | 0.0 |
-| NSLKDD | Hybrid RF+LSTM | 75.39% | 74.34% | 0.484 | 0.695 | 0.966 | 0.959 | 0.131 | 41.0 | 19.4 |
-| NSLKDD | Stacking | 77.80% | 76.76% | 0.547 | 0.727 | 0.965 | 0.960 | 0.022 | 30.6 | 15.2 |
-| UNSW | Random Forest | 89.15% | 75.49% | 0.478 | 0.723 | 0.985 | 0.993 | 0.050 | 89.4 | 291.7 |
-| UNSW | XGBoost | 89.53% | 76.18% | 0.515 | 0.731 | 0.987 | 0.994 | 0.004 | 279.5 | 5.3 |
-| UNSW | LightGBM | 89.86% | 76.37% | 0.531 | 0.735 | 0.986 | 0.994 | 0.009 | 259.5 | 10.2 |
+| Dataset | Model | Binary Acc | Multi Acc | Macro F1 | Weighted F1 | ROC-AUC | PR-AUC | Inf batched (ms) | Inf single (ms) | Train (s) | Size (MB) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| NSLKDD | Random Forest | 76.00% | 75.03% | 0.502 | 0.704 | 0.964 | 0.966 | 0.051 | 0.000 | 87.8 | 32.3 |
+| NSLKDD | SVM (RBF) | 76.23% | 74.66% | 0.465 | 0.696 | 0.948 | 0.961 | 0.137 | 0.000 | 161.7 | 0.9 |
+| NSLKDD | KNN | 76.01% | 74.37% | 0.543 | 0.699 | 0.804 | 0.824 | 0.065 | 0.000 | 40.6 | 40.4 |
+| NSLKDD | Voting Ensemble | 75.54% | 74.06% | 0.480 | 0.692 | 0.969 | 0.973 | 0.315 | 0.000 | 119.9 | 147.1 |
+| NSLKDD | XGBoost | 78.66% | 77.31% | 0.551 | 0.734 | 0.970 | 0.972 | 0.003 | 0.000 | 91.6 | 2.2 |
+| NSLKDD | LightGBM | 77.13% | 75.68% | 0.590 | 0.718 | 0.973 | 0.973 | 0.018 | 0.000 | 125.1 | 14.9 |
+| NSLKDD | CatBoost | 77.42% | 76.34% | 0.533 | 0.723 | 0.969 | 0.971 | 0.004 | 0.000 | 304.7 | 5.0 |
+| NSLKDD | 1D-CNN | 76.49% | 74.95% | 0.494 | 0.701 | 0.937 | 0.951 | 0.012 | 0.000 | 61.8 | 0.1 |
+| NSLKDD | LSTM | 77.30% | 75.77% | 0.489 | 0.712 | 0.938 | 0.945 | 0.013 | 0.000 | 50.7 | 0.2 |
+| NSLKDD | Autoencoder | 85.93% | 71.15% | 0.321 | 0.617 | 0.946 | 0.942 | 0.006 | 0.000 | 1.9 | 0.0 |
+| NSLKDD | Hybrid RF+LSTM | 75.39% | 74.34% | 0.484 | 0.695 | 0.966 | 0.959 | 0.131 | 0.000 | 41.0 | 19.4 |
+| NSLKDD | Stacking | 77.80% | 76.76% | 0.547 | 0.727 | 0.965 | 0.960 | 0.022 | 0.000 | 30.6 | 15.2 |
+| UNSW | Random Forest | 89.15% | 75.49% | 0.478 | 0.723 | 0.985 | 0.993 | 0.050 | 0.000 | 89.4 | 291.7 |
+| UNSW | XGBoost | 89.53% | 76.18% | 0.515 | 0.731 | 0.987 | 0.994 | 0.004 | 0.000 | 279.5 | 5.3 |
+| UNSW | LightGBM | 89.86% | 76.37% | 0.531 | 0.735 | 0.986 | 0.994 | 0.009 | 0.000 | 259.5 | 10.2 |
+| UNSW | 1D-CNN | 77.22% | 66.87% | 0.276 | 0.600 | 0.971 | 0.985 | 0.009 | 0.452 | 42.9 | 0.1 |
+| UNSW | LSTM | 92.90% | 72.72% | 0.350 | 0.706 | 0.972 | 0.987 | 0.011 | 0.743 | 32.5 | 0.2 |
+| UNSW | Autoencoder | 72.59% | 27.05% | 0.068 | 0.211 | 0.787 | 0.893 | 0.003 | 0.414 | 1.2 | 0.0 |
+| UNSW | Hybrid RF+LSTM | 81.62% | 70.82% | 0.343 | 0.649 | 0.980 | 0.990 | 0.139 | 68.245 | 28.0 | 222.8 |
+| UNSW | Stacking | 90.08% | 76.44% | 0.530 | 0.737 | 0.985 | 0.993 | 0.025 | 10.645 | 87.5 | 142.3 |
 <!-- RESULTS_TABLE_END -->
 
 Per-class confusion matrices for every cell live in `results/confusion_matrices/`. The model comparison charts and feature-importance plots are in `results/plots/`.
@@ -49,7 +54,7 @@ The tiers are chosen to bracket what is interesting on tabular IDS data:
 
 **Preprocessing.** Categorical features are label-encoded with encoders fit on training data only. Numeric features are standardised with `StandardScaler` (also train-only). Unseen categorical values at test time map to a stable sentinel index. The preprocessor is a single class with explicit `fit_transform` / `transform` that the test suite checks for leakage. CatBoost bypasses encoding entirely and uses the raw DataFrame with `cat_features`.
 
-**Tuning.** Tier 1 uses `GridSearchCV(cv=5)` over the published parameter ranges. SVM grid search runs on a stratified subsample because full-data SVM CV is too slow on Windows; the best estimator is then refit on the full training set. Tier 2 uses Optuna with TPE sampling, 20 trials per booster (12 for CatBoost; CatBoost's native categorical handling is slow), deterministic via the configured seed. Tier 3 trains with Adam + cosine LR + early stopping (patience-based) via a generic loop in `src/training/torch_trainer.py`. Mixed precision is enabled when CUDA is available.
+**Tuning.** Tier 1 uses `GridSearchCV(cv=5)` over the published parameter ranges. SVM grid search runs on a stratified subsample because full-data SVM CV is too slow on Windows; the best estimator is then refit on the full training set. Tier 2 uses Optuna with TPE sampling, 20 trials per booster as the configured budget (the spec called for 50; we kept 20 because TPE diminishing returns are well-documented past ~20-30 on moderate hyperparameter spaces). CatBoost is capped at 25 trials inside `tune_catboost` because its native categorical handling makes each trial slower. Tier 3 trains with Adam + cosine LR + early stopping (patience-based) via a generic loop in `src/training/torch_trainer.py`. Mixed precision is enabled when CUDA is available, and per-epoch loss / learning rate are written to TensorBoard logs under `runs/`. Tier 5 stacking uses 5-fold out-of-fold CV.
 
 **Evaluation.** Every model is scored with the same code path in `src/evaluate.py`: binary accuracy, multi-class accuracy, macro F1, weighted F1, ROC-AUC and PR-AUC for the binary task, plus per-class precision/recall/F1, plus inference latency in ms per record (measured over 1,000 records, batched), training time, and pickled model size on disk. Results land in `results/metrics.json` keyed by `(dataset, model)` and re-runs upsert in place.
 
