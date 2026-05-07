@@ -59,13 +59,34 @@ def train_loop(
     checkpoint_path: Path | None = None,
     weight_decay: float = 1e-5,
     use_amp: bool = False,
+    tb_run_name: str | None = None,
 ) -> TrainHistory:
-    """Train ``model`` with Adam + cosine LR + early stopping; returns history."""
+    """Train ``model`` with Adam + cosine LR + early stopping.
+
+    Parameters
+    ----------
+    tb_run_name : str | None
+        If set, train/val loss and learning rate are written to a local
+        TensorBoard log under ``runs/{tb_run_name}/``. The directory is created
+        on demand and never sent anywhere; everything stays on disk.
+
+    Returns
+    -------
+    TrainHistory
+        Per-epoch losses, the best epoch, and a count of epochs actually run
+        (which may be less than ``epochs`` because of early stopping).
+    """
+    from torch.utils.tensorboard.writer import SummaryWriter
+
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     amp_enabled = use_amp and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+
+    writer: SummaryWriter | None = None
+    if tb_run_name:
+        writer = SummaryWriter(log_dir=f"runs/{tb_run_name}")
 
     train_losses: list[float] = []
     val_losses: list[float] = []
@@ -112,6 +133,11 @@ def train_loop(
         val_losses.append(v)
         scheduler.step()
 
+        if writer is not None:
+            writer.add_scalar("loss/train", train_losses[-1], epoch)
+            writer.add_scalar("loss/val", v, epoch)
+            writer.add_scalar("lr", optimizer.param_groups[0]["lr"], epoch)
+
         if v < best_val - 1e-6:
             best_val = v
             best_epoch = epoch
@@ -135,6 +161,8 @@ def train_loop(
             log.info("early stop at epoch %d (best=%d, val=%.4f)", epoch, best_epoch, best_val)
             break
 
+    if writer is not None:
+        writer.close()
     if best_state is not None:
         model.load_state_dict(best_state)
     return TrainHistory(

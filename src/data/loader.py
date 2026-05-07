@@ -108,7 +108,29 @@ def _ensure_files(paths: list[Path]) -> None:
 
 
 def load_nslkdd() -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray, DatasetMeta]:
-    """Load NSL-KDD KDDTrain+ and KDDTest+, return raw features + multi labels."""
+    """Load the NSL-KDD KDDTrain+ / KDDTest+ partition.
+
+    Returns
+    -------
+    X_train : pd.DataFrame
+        Raw (un-encoded) training features.
+    y_train : np.ndarray
+        Multi-class labels in ``{0, 1, 2, 3, 4}`` corresponding to
+        ``["normal", "dos", "probe", "r2l", "u2r"]``.
+    X_test : pd.DataFrame
+        Raw test features.
+    y_test : np.ndarray
+        Multi-class test labels.
+    meta : DatasetMeta
+        Column groupings (categorical / numeric), label names, and the index of
+        the ``"normal"`` class.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the raw text files are missing under ``data/raw/``. Run
+        ``python -m src.data.download`` first.
+    """
     train_path = CONFIG.paths.data_raw / CONFIG.data.nslkdd_train
     test_path = CONFIG.paths.data_raw / CONFIG.data.nslkdd_test
     _ensure_files([train_path, test_path])
@@ -158,7 +180,22 @@ def load_nslkdd() -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray, D
 
 
 def load_unsw() -> tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray, DatasetMeta]:
-    """Load UNSW-NB15 official train/test partition."""
+    """Load the official UNSW-NB15 train / test partition.
+
+    Returns
+    -------
+    X_train, y_train, X_test, y_test, meta
+        Same structure as :func:`load_nslkdd`. Multi-class labels are in
+        ``{0..9}`` over ``["normal", "analysis", "backdoor", "dos",
+        "exploits", "fuzzers", "generic", "reconnaissance", "shellcode",
+        "worms"]``. Categorical columns are ``["proto", "service", "state"]``,
+        kept as raw strings so CatBoost can consume them natively.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the raw CSVs are missing under ``data/raw/``.
+    """
     train_path = CONFIG.paths.data_raw / CONFIG.data.unsw_train
     test_path = CONFIG.paths.data_raw / CONFIG.data.unsw_test
     _ensure_files([train_path, test_path])

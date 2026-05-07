@@ -117,6 +117,7 @@ def train_cnn(split: PreprocessedSplit) -> _TorchClassifier:
         device=device,
         checkpoint_path=CONFIG.paths.checkpoints / f"cnn_{split.meta.name}.pt",
         use_amp=device.type == "cuda",
+        tb_run_name=f"cnn_{split.meta.name}",
     )
     log.info("CNN trained: best_epoch=%d val=%.4f", history.best_epoch, history.best_val_loss)
     clf = _TorchClassifier(model, device, split.meta.num_classes)
@@ -173,6 +174,7 @@ def train_lstm(split: PreprocessedSplit, window: int = 8) -> _LSTMClassifier:
     log.info("LSTM device: %s window=%d", device_summary(), window)
 
     Xw, yw = _windowed(split.X_train, split.y_train_multi, window=window)
+    assert yw is not None  # we passed y in, so the helper returned it
 
     val_size = max(int(0.15 * len(Xw)), 1024)
     val_idx = np.random.RandomState(CONFIG.train.seed).permutation(len(Xw))[:val_size]
@@ -196,6 +198,7 @@ def train_lstm(split: PreprocessedSplit, window: int = 8) -> _LSTMClassifier:
         device=device,
         checkpoint_path=CONFIG.paths.checkpoints / f"lstm_{split.meta.name}.pt",
         use_amp=device.type == "cuda",
+        tb_run_name=f"lstm_{split.meta.name}",
     )
     log.info("LSTM trained: best_epoch=%d val=%.4f", history.best_epoch, history.best_val_loss)
     clf = _LSTMClassifier(model, device, split.meta.num_classes, window=window)

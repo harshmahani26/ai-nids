@@ -37,6 +37,11 @@ from src.data.loader import DatasetMeta
 
 log = logging.getLogger(__name__)
 
+# In-memory cache of P(attack) per (dataset, model) so a follow-up call from
+# train.py can produce a calibration plot without re-running the evaluator.
+_PROBA_CACHE: dict[tuple[str, str], np.ndarray] = {}
+_BIN_LABELS_CACHE: dict[str, np.ndarray] = {}
+
 
 class _ModelLike(Protocol):
     def predict(self, X) -> np.ndarray: ...
@@ -56,10 +61,11 @@ class ModelResult:
     macro_recall: float
     roc_auc: float | None
     pr_auc: float | None
-    inference_ms_per_record: float
+    inference_ms_per_record: float  # batched (1000 records in one predict call)
     train_time_s: float
     model_size_mb: float
     per_class: dict[str, Any]
+    inference_ms_per_record_unbatched: float = 0.0  # per-record (one row at a time)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -77,15 +83,50 @@ def _proba_attack(model, X: np.ndarray, normal_index: int) -> np.ndarray | None:
     return None
 
 
-def _measure_inference(model, X: np.ndarray, n: int = 1000) -> float:
-    """Average inference time per record over ``n`` samples (batched)."""
+def _measure_inference(model, X, n: int = 1000) -> tuple[float, float]:
+    """Measure batched and unbatched inference latency, in ms per record.
+
+    Parameters
+    ----------
+    model : sklearn-style estimator
+        Must implement ``predict``.
+    X : np.ndarray or pd.DataFrame
+        Test features. The first ``min(n, len(X))`` rows are timed.
+    n : int
+        Sample size for the timing run.
+
+    Returns
+    -------
+    (batched_ms_per_record, unbatched_ms_per_record)
+        ``batched`` calls ``predict`` once on the whole sample. ``unbatched``
+        calls ``predict`` once per row over a smaller subset (capped at 200) so
+        the total wall time stays tractable for slow learners like SVM.
+    """
+    import pandas as pd
+
     n = min(n, len(X))
-    sample = X[:n]
+    sample = X[:n] if not isinstance(X, pd.DataFrame) else X.iloc[:n]
     # Warmup
-    model.predict(sample[: min(32, n)])
+    warm = sample[:32] if not isinstance(sample, pd.DataFrame) else sample.iloc[:32]
+    model.predict(warm)
+
+    # Batched
     t0 = time.perf_counter()
     model.predict(sample)
-    return (time.perf_counter() - t0) * 1000.0 / n
+    batched_ms = (time.perf_counter() - t0) * 1000.0 / n
+
+    # Unbatched: cap at 200 single-row predicts to bound wall time.
+    m = min(200, n)
+    one_row = (
+        [sample.iloc[i : i + 1] for i in range(m)]
+        if isinstance(sample, pd.DataFrame)
+        else [sample[i : i + 1] for i in range(m)]
+    )
+    t0 = time.perf_counter()
+    for r in one_row:
+        model.predict(r)
+    unbatched_ms = (time.perf_counter() - t0) * 1000.0 / m
+    return batched_ms, unbatched_ms
 
 
 def _model_size_mb(model: Any) -> float:
@@ -108,7 +149,34 @@ def evaluate_classifier(
     save_confusion: bool = True,
     extra: dict[str, Any] | None = None,
 ) -> ModelResult:
-    """Compute all standard metrics for one model on one dataset."""
+    """Compute every standard metric for one model on one dataset.
+
+    Parameters
+    ----------
+    name : str
+        Display name; used as the key in ``results/metrics.json``.
+    model : sklearn-style estimator
+        Must implement ``predict``. ``predict_proba`` / ``decision_function``
+        are used opportunistically for ROC-AUC / PR-AUC.
+    X_test : np.ndarray or pd.DataFrame
+        Test features. CatBoost gets the raw DataFrame; every other model
+        gets the encoded numpy matrix.
+    y_test_multi, y_test_binary : np.ndarray
+        Multi-class and 0/1 binary labels for the test set.
+    meta : DatasetMeta
+        Used for label names and ``normal_index``.
+    train_time_s : float
+        Wall time spent training this model.
+    save_confusion : bool
+        If True, save binary + multi-class confusion matrix PNGs.
+    extra : dict | None
+        Free-form per-model annotations (e.g. hybrid threshold).
+
+    Returns
+    -------
+    ModelResult
+        All metrics, latencies, model size, and per-class report.
+    """
     y_pred_multi = model.predict(X_test)
     y_pred_binary = (y_pred_multi != meta.normal_index).astype(np.int64)
 
@@ -127,6 +195,9 @@ def evaluate_classifier(
             pr_auc = float(average_precision_score(y_test_binary, proba_attack))
         except Exception as e:  # pragma: no cover
             log.warning("AUC computation failed for %s: %s", name, e)
+        # Cache so train.py can build a calibration plot for the best model.
+        _PROBA_CACHE[(meta.name, name)] = np.asarray(proba_attack)
+        _BIN_LABELS_CACHE[meta.name] = np.asarray(y_test_binary)
 
     per_class = classification_report(
         y_test_multi,
@@ -137,7 +208,7 @@ def evaluate_classifier(
         zero_division=0,
     )
 
-    inference_ms = _measure_inference(model, X_test)
+    batched_ms, unbatched_ms = _measure_inference(model, X_test)
     size_mb = _model_size_mb(model)
 
     if save_confusion:
@@ -154,14 +225,16 @@ def evaluate_classifier(
         macro_recall=float(macro_rec),
         roc_auc=roc_auc,
         pr_auc=pr_auc,
-        inference_ms_per_record=float(inference_ms),
+        inference_ms_per_record=float(batched_ms),
+        inference_ms_per_record_unbatched=float(unbatched_ms),
         train_time_s=float(train_time_s),
         model_size_mb=float(size_mb),
         per_class=per_class,
         extra=extra or {},
     )
     log.info(
-        "[%s/%s] bin=%.3f multi=%.3f macroF1=%.3f rocAUC=%s prAUC=%s lat=%.2fms size=%.2fMB",
+        "[%s/%s] bin=%.3f multi=%.3f macroF1=%.3f rocAUC=%s prAUC=%s "
+        "lat_batched=%.3fms lat_single=%.3fms size=%.2fMB",
         meta.name,
         name,
         binary_acc,
@@ -169,7 +242,8 @@ def evaluate_classifier(
         macro_f1,
         f"{roc_auc:.3f}" if roc_auc is not None else "n/a",
         f"{pr_auc:.3f}" if pr_auc is not None else "n/a",
-        inference_ms,
+        batched_ms,
+        unbatched_ms,
         size_mb,
     )
     return result
@@ -286,6 +360,37 @@ def plot_model_comparison(dataset_name: str) -> Path | None:
     fig.savefig(out, dpi=130)
     plt.close(fig)
     return out
+
+
+def best_model_for_calibration(dataset_name: str) -> str | None:
+    """Return the model name with the highest macro F1 on this dataset."""
+    bucket = _load_store().get(dataset_name, {})
+    if not bucket:
+        return None
+    return max(bucket, key=lambda m: bucket[m].get("macro_f1", 0))
+
+
+def save_calibration_for_best(dataset_name: str) -> Path | None:
+    """Save a reliability diagram for the best-macro-F1 model on this dataset.
+
+    Uses the cached per-record P(attack) values from the most recent
+    :func:`evaluate_classifier` call within this Python process. Returns the
+    saved path, or ``None`` if no probability information is available.
+    """
+    best = best_model_for_calibration(dataset_name)
+    if best is None:
+        return None
+    proba = _PROBA_CACHE.get((dataset_name, best))
+    y_bin = _BIN_LABELS_CACHE.get(dataset_name)
+    if proba is None or y_bin is None:
+        log.info(
+            "calibration: no cached probabilities for (%s, %s); "
+            "re-run with --tier all in one process to populate the cache.",
+            dataset_name,
+            best,
+        )
+        return None
+    return calibration_plot(best, dataset_name, y_bin, proba)
 
 
 def calibration_plot(

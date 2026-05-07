@@ -54,6 +54,25 @@ class Preprocessor:
     def fit_transform(
         self, X: pd.DataFrame, y_multi: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Fit encoders and scaler on the training data, then transform.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Raw features (categoricals as strings, numerics as floats).
+        y_multi : np.ndarray
+            Multi-class integer labels.
+
+        Returns
+        -------
+        X_arr : np.ndarray
+            Standardised numeric matrix; categorical columns first, then
+            numeric, in the order declared by ``meta``.
+        y_multi : np.ndarray
+            Pass-through of the input labels.
+        y_binary : np.ndarray
+            Derived 0/1 labels: ``y_multi != normal_index``.
+        """
         Xc = X.copy()
         for col in self.meta.categorical_cols:
             Xc[col] = self._encoders[col].fit_transform(Xc[col].astype(str))
@@ -66,6 +85,25 @@ class Preprocessor:
     def transform(
         self, X: pd.DataFrame, y_multi: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Transform new data using the fitted encoders and scaler.
+
+        Unseen categorical values are mapped to the sentinel index ``0``,
+        so novel-attack rows at test time do not error out.
+
+        Parameters
+        ----------
+        X, y_multi : same as :meth:`fit_transform`.
+
+        Returns
+        -------
+        X_arr, y_multi, y_binary
+            Same structure as :meth:`fit_transform`.
+
+        Raises
+        ------
+        RuntimeError
+            If called before :meth:`fit_transform`.
+        """
         if not self._fitted:
             raise RuntimeError("Preprocessor must be fit before transform")
         Xc = X.copy()

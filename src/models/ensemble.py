@@ -68,7 +68,7 @@ def build_stacking(split: PreprocessedSplit) -> StackingClassifier:
         ),
     ]
     meta = LogisticRegression(max_iter=2000, n_jobs=-1)
-    cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=CONFIG.train.seed)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=CONFIG.train.seed)
 
     log.info("Stacking: fitting base learners with 5-fold CV passthrough")
     stack = StackingClassifier(

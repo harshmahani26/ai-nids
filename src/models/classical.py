@@ -34,8 +34,24 @@ def _gs(estimator, grid, scoring: str = "accuracy", n_jobs: int = -1) -> GridSea
 def tune_rf(X: np.ndarray, y: np.ndarray) -> RandomForestClassifier:
     """Tune Random Forest via grid search; returns refit best estimator.
 
+    Parameters
+    ----------
+    X, y : np.ndarray
+        Encoded training matrix and integer multi-class labels.
+
+    Returns
+    -------
+    RandomForestClassifier
+        Best estimator after 5-fold CV over
+        ``n_estimators in {100, 200, 300}`` and
+        ``max_depth in {10, 20, None}``. ``n_jobs`` is restored to ``-1`` on
+        the returned estimator for fast inference.
+
+    Notes
+    -----
     Sets ``n_jobs=1`` inside RF and parallelises across CV folds via
-    GridSearchCV. Avoids the Windows ``WinError 1450`` from nested joblib pools.
+    GridSearchCV. Avoids the Windows ``WinError 1450`` from nested joblib
+    pools.
     """
     grid = {"n_estimators": [100, 200, 300], "max_depth": [10, 20, None]}
     gs = _gs(RandomForestClassifier(random_state=CONFIG.train.seed, n_jobs=1), grid)
@@ -48,7 +64,26 @@ def tune_rf(X: np.ndarray, y: np.ndarray) -> RandomForestClassifier:
 
 
 def tune_svm(X: np.ndarray, y: np.ndarray) -> SVC:
-    """Tune SVM (RBF) on a stratified subsample, then refit on full data."""
+    """Tune SVM (RBF) on a stratified subsample, then refit on full data.
+
+    Parameters
+    ----------
+    X, y : np.ndarray
+        Encoded training matrix and integer multi-class labels.
+
+    Returns
+    -------
+    SVC
+        Best estimator from 5-fold CV over ``C in {0.1, 1, 10}`` and
+        ``gamma in {scale, 0.01, 0.1}``, refit on the full training set.
+
+    Notes
+    -----
+    Grid search runs on a stratified subsample of size
+    ``CONFIG.train.svm_subsample`` (default 20k) because full-data SVM CV
+    blows wall time on Windows CPU. Hyperparameter selection on the
+    subsample is empirically very close to the full-data selection.
+    """
     grid = {"C": [0.1, 1, 10], "gamma": ["scale", 0.01, 0.1]}
     n = min(CONFIG.train.svm_subsample, len(X))
     if n < len(X):

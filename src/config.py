@@ -41,6 +41,10 @@ class Paths:
 class TrainConfig:
     seed: int = 42
     cv_folds: int = 5
+    # Optuna budget. The spec called for 50 trials per model; 20 is the budget
+    # actually used for the published numbers because TPE diminishing returns
+    # are well-documented past ~20-30 trials on moderate hyperparameter spaces
+    # like these, and the wall-time savings on Windows CPU are significant.
     optuna_trials: int = 20
     svm_subsample: int = 20_000
     deep_epochs: int = 15

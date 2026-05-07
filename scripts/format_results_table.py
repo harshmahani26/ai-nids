@@ -42,7 +42,8 @@ def render() -> str:
         "Weighted F1",
         "ROC-AUC",
         "PR-AUC",
-        "Inference (ms)",
+        "Inf batched (ms)",
+        "Inf single (ms)",
         "Train (s)",
         "Size (MB)",
     ]
@@ -86,6 +87,7 @@ def render() -> str:
                         fmt_f(v.get("roc_auc")),
                         fmt_f(v.get("pr_auc")),
                         fmt_f(v["inference_ms_per_record"]),
+                        fmt_f(v.get("inference_ms_per_record_unbatched", 0.0)),
                         fmt_f(v["train_time_s"], 1),
                         fmt_f(v["model_size_mb"], 1),
                     ]

@@ -46,7 +46,22 @@ def _holdout_df(
 
 
 def tune_xgboost(X: np.ndarray, y: np.ndarray, meta: DatasetMeta):
-    """Optuna-tuned XGBoost multi-class classifier."""
+    """Optuna-tuned XGBoost multi-class classifier.
+
+    Parameters
+    ----------
+    X, y : np.ndarray
+        Encoded training matrix and integer multi-class labels.
+    meta : DatasetMeta
+        Used for ``num_class``.
+
+    Returns
+    -------
+    xgb.XGBClassifier
+        Best estimator refit on the full training set after
+        ``CONFIG.train.optuna_trials`` TPE iterations of macro-F1
+        maximisation on a held-out 20% slice.
+    """
     import xgboost as xgb
 
     X_tr, X_val, y_tr, y_val = _holdout(X, y)
@@ -92,7 +107,18 @@ def tune_xgboost(X: np.ndarray, y: np.ndarray, meta: DatasetMeta):
 
 
 def tune_lightgbm(X: np.ndarray, y: np.ndarray, meta: DatasetMeta):
-    """Optuna-tuned LightGBM multi-class classifier."""
+    """Optuna-tuned LightGBM multi-class classifier.
+
+    Parameters
+    ----------
+    X, y : np.ndarray
+    meta : DatasetMeta
+
+    Returns
+    -------
+    lgb.LGBMClassifier
+        Best estimator refit on full training data.
+    """
     import lightgbm as lgb
 
     X_tr, X_val, y_tr, y_val = _holdout(X, y)
@@ -144,8 +170,24 @@ def tune_lightgbm(X: np.ndarray, y: np.ndarray, meta: DatasetMeta):
 def tune_catboost(X_df: pd.DataFrame, y: np.ndarray, meta: DatasetMeta):
     """Optuna-tuned CatBoost using native ``cat_features``.
 
-    Receives the *raw* (un-encoded) DataFrame: this is the differentiator
-    versus XGBoost/LightGBM, which see only post-encoding numerics.
+    Parameters
+    ----------
+    X_df : pd.DataFrame
+        The *raw* (un-encoded) training DataFrame. This is the differentiator
+        versus XGBoost / LightGBM, which see only post-encoding numerics.
+        Categorical columns are stringified inside the function before they
+        are passed to CatBoost.
+    y : np.ndarray
+    meta : DatasetMeta
+        Provides the categorical column names used to build the ``cat_features``
+        index list.
+
+    Returns
+    -------
+    _CatBoostPredictWrapper
+        Wraps the trained CatBoost so that downstream code can call
+        ``predict`` on a raw DataFrame the same way it calls predict on the
+        numpy matrix used by every other model.
     """
     from catboost import CatBoostClassifier, Pool
 
@@ -180,10 +222,11 @@ def tune_catboost(X_df: pd.DataFrame, y: np.ndarray, meta: DatasetMeta):
         preds = clf.predict(X_val_df).ravel().astype(int)
         return _macro_f1(y_val, preds)
 
-    # CatBoost is the slowest of the three; cap at 12 trials to keep wall time
-    # comparable to XGBoost / LightGBM (which finish in 2-3 min each).
+    # CatBoost trials run slower than XGB/LGB because of native categorical
+    # encoding. Cap at 25 to keep wall time bounded; matches the spec direction
+    # of "50 trials per model" for the faster boosters and stays tractable here.
     study = make_study("catboost")
-    study.optimize(objective, n_trials=min(CONFIG.train.optuna_trials, 12), show_progress_bar=False)
+    study.optimize(objective, n_trials=min(CONFIG.train.optuna_trials, 25), show_progress_bar=False)
     log.info("CatBoost best: %s | macroF1=%.4f", study.best_params, study.best_value)
 
     final = CatBoostClassifier(
