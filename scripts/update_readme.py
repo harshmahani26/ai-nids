@@ -14,7 +14,6 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.format_results_table import render as render_table  # noqa: E402
 
-
 SHAP_NOTES = """The SHAP global-importance bar (`results/shap/nslkdd_xgboost_global_bar.png`) shows that on NSL-KDD the dominant features for the tuned XGBoost are `src_bytes`, `flag`, `same_srv_rate`, `diff_srv_rate`, and `dst_host_serror_rate`. The engineered traffic-window features dominate over raw byte counts collectively, which matches what the original KDD authors observed.
 
 The per-class heatmap (`results/shap/nslkdd_xgboost_per_class.png`) makes the R2L/U2R problem concrete: the same handful of features dominate the model's reasoning across every attack category, including the rare ones the model is failing on. There is no separate, distinctive feature signature for R2L or U2R that the model is using - it is just generalising what worked for DoS and Probe. That is a useful confirmation that the failure mode is data scarcity, not a missing feature."""

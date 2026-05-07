@@ -81,7 +81,7 @@ def test_upsert_replaces_existing(fake_meta, tmp_path: Path, monkeypatch) -> Non
 
 def _patched_config(tmp: Path):
     """Replace CONFIG.paths with tmp paths for the test."""
-    from src.config import Config, Paths, TrainConfig, DataConfig
+    from src.config import Config, DataConfig, Paths, TrainConfig
 
     p = Paths(
         root=tmp,
